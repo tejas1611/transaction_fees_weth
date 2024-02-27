@@ -1,9 +1,9 @@
-from datetime import date
+from datetime import datetime
 from pydantic import BaseModel
 
 class TransactionBase(BaseModel):
     id: str
-    timestamp: date
+    timestamp: datetime
     gas_price: int
     gas_used: int
     transaction_fee_usdt: float

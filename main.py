@@ -1,11 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 import requests
-from datetime import date
-from typing import Optional
+from datetime import datetime
+from typing import Optional, List, Dict
 import json
 
-from utils import get_price, get_block_timestamp
+from utils import get_price, get_block_timestamp, get_first_block_after_timestamp
 from sqlalchemy.orm import Session
 import models
 import schemas
@@ -50,22 +50,66 @@ def eth_to_usdt(eth_amount, timestamp):
 
 # Endpoint to fetch historical transactions for a given period of time
 @app.get('/transactions')
-def get_historical_transactions(start_time: Optional[date] = None, end_time: Optional[date] = None):
-    params = {
-        "module": "account",
-        "action": "tokentx",
-        "address": CONTRACT_ADDRESS,
-        "startblock": start_time,
-        "endblock": end_time,
-        "sort": "asc",
-        "apikey": ETHERSCAN_API_KEY
-    }
+def get_historical_transactions(start_time: datetime, end_time: datetime, db: Session = Depends(get_db)) -> List[Dict]:
+    start_ts = int(datetime.timestamp(start_time))
+    end_ts = int(datetime.timestamp(end_time)) + 1
 
-    response = requests.get(ETHERSCAN_BASE_URL, params=params)
-    if response.status_code == 200:
-        return response.json()["result"]
-    else:
-        return None
+    blockno_after_ts = get_first_block_after_timestamp(ETHERSCAN_BASE_URL, ETHERSCAN_API_KEY, start_ts)
+    
+    transaction_fees_result = []
+    curr_block = blockno_after_ts
+    completed = False
+
+    while not completed:
+        params = {
+            "module": "account",
+            "action": "tokentx",
+            "address": CONTRACT_ADDRESS,
+            "startblock": curr_block,
+            "sort": "asc",
+            "apikey": ETHERSCAN_API_KEY
+        }
+
+        response = requests.get(ETHERSCAN_BASE_URL, params=params)
+        all_transactions = response.json()["result"]
+
+        if response.status_code == 200:
+            for i in range(0, len(all_transactions), 2):
+                transaction = all_transactions[i]
+                ts = int(transaction["timeStamp"])
+                if ts > end_ts:
+                    completed = True
+                    break
+                else:
+                    transaction_hash = transaction["hash"]
+
+                    # Check transaction hash in db
+                    transaction_from_db = crud.get_transaction(db, transaction_hash)
+                    if transaction_from_db is not None: 
+                        transaction_fee_usdt = transaction_from_db.transaction_fee_usdt
+                    else:
+                        gas_price = int(transaction["gasPrice"])
+                        gas_used = int(transaction["gasUsed"])
+                        transaction_fee_eth = 1.0 * gas_price * gas_used / 10**18
+                        transaction_fee_usdt = eth_to_usdt(transaction_fee_eth, ts)
+
+                        # TODO: Write to db
+                        # transaction_obj = schemas.TransactionBase(id=transaction_hash,
+                        #                                 timestamp=ts,
+                        #                                 gas_price=gas_price,
+                        #                                 gas_used=gas_used,
+                        #                                 transaction_fee_usdt=transaction_fee_usdt)
+                        # crud.create_transaction(db, transaction_obj)
+
+                    transaction_fees_result.append({"hash": transaction_hash, 
+                                                    "timestamp": ts, 
+                                                    "transaction_fee_usdt": transaction_fee_usdt})
+                
+                curr_block = int(transaction["blockNumber"]) + 1
+        
+        else: break
+        
+    return transaction_fees_result
 
 
 # Endpoint to get transaction fee for a given transaction hash
@@ -73,7 +117,7 @@ def get_historical_transactions(start_time: Optional[date] = None, end_time: Opt
 def get_transaction(transaction_hash: str, db: Session = Depends(get_db)) -> float:
     transaction = crud.get_transaction(db, transaction_hash)
     
-    if transaction is not None: return transaction.transaction_fee
+    if transaction is not None: return transaction.transaction_fee_usdt
     
     params = {
         "module": "proxy",
@@ -104,7 +148,7 @@ def get_transaction(transaction_hash: str, db: Session = Depends(get_db)) -> flo
                                                       timestamp=ts,
                                                       gas_price=gas_price,
                                                       gas_used=gas_used,
-                                                      transaction_fee=transaction_fee_usdt)
+                                                      transaction_fee_usdt=transaction_fee_usdt)
             crud.create_transaction(db, transaction_obj)
             
             return transaction_fee_usdt

@@ -38,3 +38,20 @@ def get_block_timestamp(url, api_key, block_number):
         return int(response.json()["result"]["timestamp"], 16)
     else:
         return None
+
+# Retrieve block number of the first block after a given timestamp
+def get_first_block_after_timestamp(url, api_key, timestamp):
+    params = {
+        "module": "block",
+        "action": "getblocknobytime",
+        "timestamp": timestamp,
+        "closest": "after",
+        "apikey": api_key
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        return response.json()["result"]
+    else:
+        return None
