@@ -1,0 +1,6 @@
+{
+    "ETHERSCAN_API_KEY": "Your Etherscan API Key",
+    "WETH_USDT_CONTRACT_ADDRESS": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+    "ETHERSCAN_BASE_URL": "https://api.etherscan.io/api",
+    "BINANCE_BASE_URL": "https://api.binance.com/api/v3/"
+}
