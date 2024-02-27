@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 import json
 
@@ -51,12 +51,13 @@ def eth_to_usdt(eth_amount, timestamp):
 # Endpoint to fetch historical transactions for a given period of time
 @app.get('/transactions')
 def get_historical_transactions(start_time: datetime, end_time: datetime, db: Session = Depends(get_db)) -> List[Dict]:
-    start_ts = int(datetime.timestamp(start_time))
-    end_ts = int(datetime.timestamp(end_time)) + 1
+    start_ts = int(datetime.timestamp(start_time.replace(tzinfo=timezone.utc)))
+    end_ts = int(datetime.timestamp(end_time.replace(tzinfo=timezone.utc))) + 1
 
     blockno_after_ts = get_first_block_after_timestamp(ETHERSCAN_BASE_URL, ETHERSCAN_API_KEY, start_ts)
     
     transaction_fees_result = []
+    transaction_schemas = []
     curr_block = blockno_after_ts
     completed = False
 
@@ -74,6 +75,7 @@ def get_historical_transactions(start_time: datetime, end_time: datetime, db: Se
         all_transactions = response.json()["result"]
 
         if response.status_code == 200:
+            # Each transaction hash has two entries in the response
             for i in range(0, len(all_transactions), 2):
                 transaction = all_transactions[i]
                 ts = int(transaction["timeStamp"])
@@ -93,13 +95,12 @@ def get_historical_transactions(start_time: datetime, end_time: datetime, db: Se
                         transaction_fee_eth = 1.0 * gas_price * gas_used / 10**18
                         transaction_fee_usdt = eth_to_usdt(transaction_fee_eth, ts)
 
-                        # TODO: Write to db
-                        # transaction_obj = schemas.TransactionBase(id=transaction_hash,
-                        #                                 timestamp=ts,
-                        #                                 gas_price=gas_price,
-                        #                                 gas_used=gas_used,
-                        #                                 transaction_fee_usdt=transaction_fee_usdt)
-                        # crud.create_transaction(db, transaction_obj)
+                        transaction_obj = schemas.TransactionBase(id=transaction_hash,
+                                                        timestamp=ts,
+                                                        gas_price=gas_price,
+                                                        gas_used=gas_used,
+                                                        transaction_fee_usdt=transaction_fee_usdt)
+                        transaction_schemas.append(transaction_obj)
 
                     transaction_fees_result.append({"hash": transaction_hash, 
                                                     "timestamp": ts, 
@@ -108,7 +109,10 @@ def get_historical_transactions(start_time: datetime, end_time: datetime, db: Se
                 curr_block = int(transaction["blockNumber"]) + 1
         
         else: break
-        
+    
+    # Write transactions to db
+    if transaction_schemas: crud.create_transactions(db, transaction_schemas)
+
     return transaction_fees_result
 
 
