@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 import requests
 from datetime import date
@@ -6,6 +6,13 @@ from typing import Optional
 import json
 
 from utils import get_price, get_block_timestamp
+from sqlalchemy.orm import Session
+import models
+import schemas
+import crud
+from database import SessionLocal, engine
+
+models.Base.metadata.create_all(bind=engine)
 
 
 with open('config.json') as config_file:
@@ -19,9 +26,18 @@ BINANCE_BASE_URL = config["BINANCE_BASE_URL"]
 
 app = FastAPI()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 @app.get('/')
 def home():
     return RedirectResponse(url="/docs", status_code=302)
+
 
 # Endpoint to convert ETH to USDT at given timestamp
 def eth_to_usdt(eth_amount, timestamp):
@@ -54,7 +70,11 @@ def get_historical_transactions(start_time: Optional[date] = None, end_time: Opt
 
 # Endpoint to get transaction fee for a given transaction hash
 @app.get('/transaction')
-def get_transaction(transaction_hash: str) -> float:
+def get_transaction(transaction_hash: str, db: Session = Depends(get_db)) -> float:
+    transaction = crud.get_transaction(db, transaction_hash)
+    
+    if transaction is not None: return transaction.transaction_fee
+    
     params = {
         "module": "proxy",
         "action": "eth_getTransactionReceipt",
@@ -79,6 +99,13 @@ def get_transaction(transaction_hash: str) -> float:
             
             if transaction_fee_usdt is None:
                 raise HTTPException(status_code=500, detail="Failed to fetch price")
+            
+            transaction_obj = schemas.TransactionBase(id=transaction_hash,
+                                                      timestamp=ts,
+                                                      gas_price=gas_price,
+                                                      gas_used=gas_used,
+                                                      transaction_fee=transaction_fee_usdt)
+            crud.create_transaction(db, transaction_obj)
             
             return transaction_fee_usdt
         
