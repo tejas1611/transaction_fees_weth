@@ -207,7 +207,7 @@ def record_latest_transactions(start_block):
     if transaction_schemas: 
         with SessionLocal() as db:
             crud.create_transactions(db, list(transaction_schemas.values()))
-            print(f"Wrote to db {len(transaction_schemas)} transactions")
+            # print(f"Wrote to db {len(transaction_schemas)} transactions")
 
     return latest_blockno if latest_blockno != -1 else start_block
 
@@ -234,7 +234,7 @@ def get_recent_transactions() -> None:
     try:
         last_block_recorded = record_latest_transactions(last_block_recorded)
     except HTTPException:
-        print("Failed to fetch transactions. Try again later.")
+        print("Failed to fetch live transactions. Try again later.")
 
 
 if __name__ == "__main__":

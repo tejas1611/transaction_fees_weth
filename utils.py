@@ -2,6 +2,9 @@ import requests
 
 # Retrieve price of a given symbol at a given timestamp
 def get_price(url, symbol, timestamp):
+    # Binance API does not support timestamps before 2017-08-17
+    if timestamp < 1502942460: return None
+
     # Convert timestamp to milliseconds
     timestamp_ms = int(timestamp * 1000)
 

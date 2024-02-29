@@ -6,3 +6,4 @@ uvicorn==0.22.0
 SQLAlchemy==1.4.22
 starlette==0.14.2
 typing_extensions==4.6.2
+pytest==7.1.3
