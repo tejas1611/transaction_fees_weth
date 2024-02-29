@@ -30,6 +30,10 @@ def test_transaction_not_in_db():
     true_fee = 137.10
     assert abs(returned_fee - true_fee) < 0.1
 
+def test_invalid_transaction():
+    response = client.get("/transaction",params={"transaction_hash": "0x78967868uuyuy"})
+    assert response.status_code == 404
+
 def test_eth_to_usdt():
     returned_amount_usdt = eth_to_usdt(1.0, 1620000000)
     true_amount_usdt = 2949.33

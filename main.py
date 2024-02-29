@@ -133,7 +133,7 @@ def get_transaction(transaction_hash: str, db: Session = Depends(get_db)) -> flo
     
     if response.status_code == 200:
         body = response.json()
-        if body['result'] is not None:
+        if 'result' in body and body['result'] is not None:
             gas_price = int(body['result']['effectiveGasPrice'], 16)
             gas_used = int(body['result']['gasUsed'], 16)
             transaction_fee = gas_price * gas_used

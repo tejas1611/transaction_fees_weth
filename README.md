@@ -18,7 +18,7 @@ Transactions (live and historical) are processed and stored in `transactions.db`
 2. Install pytest  
 `pip install pytest==7.1.3`
 3. From root directory, execute: `pytest`.  
-This will execute 7 unit tests.
+This will execute 8 unit tests.
 
 Note: There is a unit test `test_transaction_not_in_db` in `test_main.py`. Replace the `transaction_hash` parameter with a new (random) hash.
 
